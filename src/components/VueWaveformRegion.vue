@@ -73,7 +73,7 @@ const drawWaveform = () => {
 
   // Draw waveform
   ctx.beginPath();
-  ctx.strokeStyle = '#ff0000';
+  ctx.strokeStyle = '#FFFFFF'; // Changed from '#ff0000' to white
   ctx.lineWidth = 1;
 
   for (let i = 0; i < canvas.value.width; i++) {
