@@ -31,6 +31,8 @@ const height = ref(128);
 let wavesurfer: WaveSurfer | null = null;
 let svg: any = null;
 let region: any = null;
+let leftHandle: any = null;
+let rightHandle: any = null;
 
 const handleFileUpload = (event: Event) => {
   const input = event.target as HTMLInputElement;
@@ -67,14 +69,14 @@ const initSVG = () => {
     .radius(8);
 
   // Add left handle
-  const leftHandle = svg.group();
+  leftHandle = svg.group();
   leftHandle.rect(4, 32)
     .fill('#4B5563')
     .center(0, height.value / 2)
     .radius(2);
   
   // Add right handle
-  const rightHandle = svg.group();
+  rightHandle = svg.group();
   rightHandle.rect(4, 32)
     .fill('#4B5563')
     .center(width.value, height.value / 2)
@@ -83,15 +85,16 @@ const initSVG = () => {
   // Make handles draggable
   leftHandle.draggable()
     .on('dragmove', (e: any) => {
-      const newX = Math.max(0, Math.min(e.detail.box.x, width.value - 200));
+      const newX = Math.max(0, Math.min(e.detail.box.x, rightHandle.cx() - 20));
       leftHandle.center(newX, height.value / 2);
-      region.width(width.value - newX);
+      const regionWidth = rightHandle.cx() - newX;
+      region.width(regionWidth);
       region.x(newX);
     });
 
   rightHandle.draggable()
     .on('dragmove', (e: any) => {
-      const newX = Math.max(200, Math.min(e.detail.box.x, width.value));
+      const newX = Math.max(leftHandle.cx() + 20, Math.min(e.detail.box.x, width.value));
       rightHandle.center(newX, height.value / 2);
       region.width(newX - region.x());
     });
