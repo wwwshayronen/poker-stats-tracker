@@ -19,6 +19,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import WaveSurfer from 'wavesurfer.js';
+import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions';
 import { SVG } from '@svgdotjs/svg.js';
 import '@svgdotjs/svg.draggable.js';
 
@@ -33,7 +34,7 @@ let svg: any = null;
 let region: any = null;
 let leftHandle: any = null;
 let rightHandle: any = null;
-let audioBuffer: AudioBuffer | null = null;
+let activeRegion: any = null;
 
 const handleFileUpload = async (event: Event) => {
   const input = event.target as HTMLInputElement;
@@ -55,34 +56,48 @@ const initWaveSurfer = () => {
     height: height.value,
     normalize: true,
     interact: false,
-    backend: 'WebAudio'
+    plugins: [
+      RegionsPlugin.create()
+    ]
   });
 
   wavesurfer.on('ready', () => {
-    audioBuffer = wavesurfer.getDecodedData();
+    // Create initial region spanning the entire track
+    if (activeRegion) {
+      activeRegion.remove();
+    }
+    
+    activeRegion = wavesurfer.regions.add({
+      start: 0,
+      end: wavesurfer.getDuration(),
+      color: 'rgba(0, 0, 0, 0.1)',
+      drag: false,
+      resize: false
+    });
   });
 };
 
-const updateWaveformView = () => {
-  if (!wavesurfer || !audioBuffer) return;
+const updateWaveformRegion = (start: number, end: number) => {
+  if (!wavesurfer || !activeRegion) return;
 
-  const start = leftHandle.cx() / width.value;
-  const end = rightHandle.cx() / width.value;
-  
-  // Create a new AudioBuffer with the trimmed data
-  const sampleRate = audioBuffer.sampleRate;
-  const startSample = Math.floor(start * audioBuffer.length);
-  const endSample = Math.floor(end * audioBuffer.length);
-  
-  // Update the waveform display
-  wavesurfer.regions.clear();
-  wavesurfer.regions.add({
-    start: start * audioBuffer.duration,
-    end: end * audioBuffer.duration,
+  const duration = wavesurfer.getDuration();
+  const startTime = (start / width.value) * duration;
+  const endTime = (end / width.value) * duration;
+
+  activeRegion.remove();
+  activeRegion = wavesurfer.regions.add({
+    start: startTime,
+    end: endTime,
     color: 'rgba(0, 0, 0, 0.1)',
     drag: false,
     resize: false
   });
+
+  // Update visual overlay
+  if (region) {
+    region.x(start);
+    region.width(end - start);
+  }
 };
 
 const initSVG = () => {
@@ -115,23 +130,14 @@ const initSVG = () => {
     .on('dragmove', (e: any) => {
       const newX = Math.max(0, Math.min(e.detail.box.x, rightHandle.cx() - 20));
       leftHandle.center(newX, height.value / 2);
-      
-      // Update region position and width
-      region.x(newX);
-      region.width(rightHandle.cx() - newX);
-      
-      // Update waveform view
-      updateWaveformView();
+      updateWaveformRegion(newX, rightHandle.cx());
     });
 
   rightHandle.draggable()
     .on('dragmove', (e: any) => {
       const newX = Math.max(leftHandle.cx() + 20, Math.min(e.detail.box.x, width.value));
       rightHandle.center(newX, height.value / 2);
-      region.width(newX - region.x());
-      
-      // Update waveform view
-      updateWaveformView();
+      updateWaveformRegion(leftHandle.cx(), newX);
     });
 };
 
