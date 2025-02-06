@@ -66,13 +66,19 @@ const WaveformRegion = ({
           transform: `translateX(${leftOffset}px)`,
         }}
         className={cn(
-          "absolute h-full bg-[#F6B637] rounded-lg transition-colors",
+          "absolute h-full bg-[#F6B637] rounded-lg transition-colors overflow-hidden",
           "flex items-center justify-center",
           className
         )}
       >
         {/* Waveform visualization */}
-        <div className="absolute inset-0 flex items-center justify-around px-4">
+        <div 
+          className="absolute inset-0 flex items-center justify-around px-4"
+          style={{
+            width: '100%',
+            transform: `translateX(0)`,
+          }}
+        >
           {Array.from({ length: 20 }).map((_, i) => (
             <div
               key={i}
