@@ -20,6 +20,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import WaveSurfer from 'wavesurfer.js';
 import { SVG } from '@svgdotjs/svg.js';
+import '@svgdotjs/svg.draggable.js';
 
 const container = ref<HTMLDivElement | null>(null);
 const waveformContainer = ref<HTMLDivElement | null>(null);
