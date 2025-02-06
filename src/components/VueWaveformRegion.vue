@@ -12,6 +12,7 @@
         hover:file:bg-violet-100"
     />
     <div class="relative">
+      <canvas ref="canvas" class="w-full h-32 bg-gray-50 rounded-lg absolute inset-0"></canvas>
       <div 
         v-if="audioBuffer"
         class="absolute inset-0"
@@ -21,7 +22,6 @@
           :style="{ left: `${selectionStart}px`, width: `${selectionWidth}px` }"
         ></div>
       </div>
-      <canvas ref="canvas" class="w-full h-32 bg-gray-50 rounded-lg relative z-10"></canvas>
       <div 
         v-if="audioBuffer"
         class="absolute h-8 w-1 bg-gray-600 cursor-ew-resize top-1/2 -translate-y-1/2"
