@@ -11,147 +11,146 @@
         file:bg-violet-50 file:text-violet-700
         hover:file:bg-violet-100"
     />
-    <div ref="waveformContainer" class="absolute inset-0 mt-12"></div>
-    <svg ref="svgContainer" class="absolute inset-0 mt-12" :width="width" :height="height"></svg>
+    <canvas ref="canvas" class="w-full h-32 bg-gray-50 rounded-lg"></canvas>
+    <div class="absolute inset-0 mt-12 pointer-events-none">
+      <div 
+        ref="selection" 
+        class="absolute h-full bg-[#F6B637] opacity-30"
+        :style="{ left: `${selectionStart}px`, width: `${selectionWidth}px` }"
+      ></div>
+      <div 
+        class="absolute h-8 w-1 bg-gray-600 cursor-ew-resize top-1/2 -translate-y-1/2"
+        :style="{ left: `${selectionStart}px` }"
+        @mousedown="startDragging('start')"
+      ></div>
+      <div 
+        class="absolute h-8 w-1 bg-gray-600 cursor-ew-resize top-1/2 -translate-y-1/2"
+        :style="{ left: `${selectionStart + selectionWidth}px` }"
+        @mousedown="startDragging('end')"
+      ></div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue';
-import WaveSurfer from 'wavesurfer.js';
-import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions';
-import { SVG } from '@svgdotjs/svg.js';
-import '@svgdotjs/svg.draggable.js';
 
 const container = ref<HTMLDivElement | null>(null);
-const waveformContainer = ref<HTMLDivElement | null>(null);
-const svgContainer = ref<SVGElement | null>(null);
-const width = ref(800);
-const height = ref(128);
+const canvas = ref<HTMLCanvasElement | null>(null);
+const selection = ref<HTMLDivElement | null>(null);
+const audioContext = ref<AudioContext | null>(null);
+const audioBuffer = ref<AudioBuffer | null>(null);
 
-let wavesurfer: WaveSurfer | null = null;
-let svg: any = null;
-let region: any = null;
-let leftHandle: any = null;
-let rightHandle: any = null;
-let activeRegion: any = null;
+const selectionStart = ref(0);
+const selectionWidth = ref(800);
+const isDragging = ref<'start' | 'end' | null>(null);
+const dragStartX = ref(0);
+const initialStart = ref(0);
+const initialWidth = ref(0);
+
+const drawWaveform = () => {
+  if (!canvas.value || !audioBuffer.value) return;
+  
+  const ctx = canvas.value.getContext('2d');
+  if (!ctx) return;
+
+  // Set canvas dimensions
+  canvas.value.width = canvas.value.offsetWidth;
+  canvas.value.height = canvas.value.offsetHeight;
+
+  // Clear canvas
+  ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
+
+  // Get audio data
+  const data = audioBuffer.value.getChannelData(0);
+  const step = Math.ceil(data.length / canvas.value.width);
+  const amp = canvas.value.height / 2;
+
+  ctx.beginPath();
+  ctx.moveTo(0, amp);
+  ctx.strokeStyle = '#ff0000';
+  ctx.lineWidth = 1;
+
+  // Draw waveform
+  for (let i = 0; i < canvas.value.width; i++) {
+    let min = 1.0;
+    let max = -1.0;
+    
+    for (let j = 0; j < step; j++) {
+      const datum = data[(i * step) + j];
+      if (datum < min) min = datum;
+      if (datum > max) max = datum;
+    }
+    
+    ctx.lineTo(i, (1 + min) * amp);
+    ctx.lineTo(i, (1 + max) * amp);
+  }
+
+  ctx.stroke();
+};
 
 const handleFileUpload = async (event: Event) => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   
-  if (file && wavesurfer) {
-    const url = URL.createObjectURL(file);
-    wavesurfer.load(url);
+  if (!file) return;
+
+  // Initialize audio context if needed
+  if (!audioContext.value) {
+    audioContext.value = new AudioContext();
   }
-};
 
-const initWaveSurfer = () => {
-  if (!waveformContainer.value) return;
-
-  wavesurfer = WaveSurfer.create({
-    container: waveformContainer.value,
-    waveColor: '#ff0000',
-    progressColor: '#ff6666',
-    height: height.value,
-    normalize: true,
-    interact: false,
-    plugins: [
-      RegionsPlugin.create()
-    ]
-  });
-
-  wavesurfer.on('ready', () => {
-    // Create initial region spanning the entire track
-    if (activeRegion) {
-      activeRegion.remove();
-    }
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    audioBuffer.value = await audioContext.value.decodeAudioData(arrayBuffer);
+    drawWaveform();
     
-    activeRegion = wavesurfer.regions.add({
-      start: 0,
-      end: wavesurfer.getDuration(),
-      color: 'rgba(0, 0, 0, 0.1)',
-      drag: false,
-      resize: false
-    });
-  });
-};
-
-const updateWaveformRegion = (start: number, end: number) => {
-  if (!wavesurfer || !activeRegion) return;
-
-  const duration = wavesurfer.getDuration();
-  const startTime = (start / width.value) * duration;
-  const endTime = (end / width.value) * duration;
-
-  activeRegion.remove();
-  activeRegion = wavesurfer.regions.add({
-    start: startTime,
-    end: endTime,
-    color: 'rgba(0, 0, 0, 0.1)',
-    drag: false,
-    resize: false
-  });
-
-  // Update visual overlay
-  if (region) {
-    region.x(start);
-    region.width(end - start);
+    // Reset selection to full width
+    selectionStart.value = 0;
+    selectionWidth.value = canvas.value?.offsetWidth || 800;
+  } catch (error) {
+    console.error('Error loading audio file:', error);
   }
 };
 
-const initSVG = () => {
-  if (!svgContainer.value) return;
+const startDragging = (handle: 'start' | 'end') => {
+  isDragging.value = handle;
+  dragStartX.value = selectionStart.value;
+  initialStart.value = selectionStart.value;
+  initialWidth.value = selectionWidth.value;
+};
 
-  svg = SVG(svgContainer.value);
-  
-  // Create the draggable region
-  region = svg.rect(width.value, height.value)
-    .fill('#F6B637')
-    .opacity(0.3)
-    .radius(8);
+const handleMouseMove = (e: MouseEvent) => {
+  if (!isDragging.value || !canvas.value) return;
 
-  // Add left handle
-  leftHandle = svg.group();
-  leftHandle.rect(4, 32)
-    .fill('#4B5563')
-    .center(0, height.value / 2)
-    .radius(2);
-  
-  // Add right handle
-  rightHandle = svg.group();
-  rightHandle.rect(4, 32)
-    .fill('#4B5563')
-    .center(width.value, height.value / 2)
-    .radius(2);
+  const rect = canvas.value.getBoundingClientRect();
+  const x = Math.max(0, Math.min(e.clientX - rect.left, canvas.value.offsetWidth));
 
-  // Make handles draggable
-  leftHandle.draggable()
-    .on('dragmove', (e: any) => {
-      const newX = Math.max(0, Math.min(e.detail.box.x, rightHandle.cx() - 20));
-      leftHandle.center(newX, height.value / 2);
-      updateWaveformRegion(newX, rightHandle.cx());
-    });
+  if (isDragging.value === 'start') {
+    const newStart = Math.min(x, initialStart.value + initialWidth.value - 20);
+    const newWidth = initialStart.value + initialWidth.value - newStart;
+    selectionStart.value = newStart;
+    selectionWidth.value = newWidth;
+  } else {
+    const newWidth = Math.max(20, Math.min(x - selectionStart.value, canvas.value.offsetWidth - selectionStart.value));
+    selectionWidth.value = newWidth;
+  }
+};
 
-  rightHandle.draggable()
-    .on('dragmove', (e: any) => {
-      const newX = Math.max(leftHandle.cx() + 20, Math.min(e.detail.box.x, width.value));
-      rightHandle.center(newX, height.value / 2);
-      updateWaveformRegion(leftHandle.cx(), newX);
-    });
+const handleMouseUp = () => {
+  isDragging.value = null;
 };
 
 onMounted(() => {
-  // Delay initialization to ensure proper mounting
-  setTimeout(() => {
-    initWaveSurfer();
-    initSVG();
-  }, 100);
+  window.addEventListener('mousemove', handleMouseMove);
+  window.addEventListener('mouseup', handleMouseUp);
 });
 
 onBeforeUnmount(() => {
-  if (wavesurfer) {
-    wavesurfer.destroy();
+  window.removeEventListener('mousemove', handleMouseMove);
+  window.removeEventListener('mouseup', handleMouseUp);
+  if (audioContext.value) {
+    audioContext.value.close();
   }
 });
 </script>
@@ -177,5 +176,8 @@ onBeforeUnmount(() => {
 }
 .mt-12 {
   margin-top: 3rem;
+}
+.pointer-events-none {
+  pointer-events: none;
 }
 </style>
