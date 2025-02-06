@@ -12,16 +12,28 @@
         hover:file:bg-violet-100"
     />
     <div class="relative">
-      <canvas ref="canvas" class="w-full h-32 bg-gray-800 rounded-lg absolute inset-0"></canvas>
-      <div 
-        v-if="audioBuffer"
-        class="absolute inset-0"
+      <svg 
+        ref="svg" 
+        class="w-full h-32 bg-gray-800 rounded-lg"
+        :viewBox="`0 0 ${svgWidth} ${svgHeight}`"
+        preserveAspectRatio="none"
       >
-        <div 
-          class="absolute h-full bg-[#F6B637] opacity-50"
-          :style="{ left: `${selectionStart}px`, width: `${selectionWidth}px` }"
-        ></div>
-      </div>
+        <path
+          v-if="waveformPath"
+          :d="waveformPath"
+          stroke="white"
+          fill="none"
+          stroke-width="1"
+        />
+        <rect
+          v-if="audioBuffer"
+          :x="selectionStart"
+          y="0"
+          :width="selectionWidth"
+          :height="svgHeight"
+          class="fill-[#F6B637] opacity-50"
+        />
+      </svg>
       <div 
         v-if="audioBuffer"
         class="absolute h-8 w-1 bg-gray-600 cursor-ew-resize top-1/2 -translate-y-1/2"
@@ -42,9 +54,13 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 const container = ref<HTMLDivElement | null>(null);
-const canvas = ref<HTMLCanvasElement | null>(null);
+const svg = ref<SVGSVGElement | null>(null);
 const audioContext = ref<AudioContext | null>(null);
 const audioBuffer = ref<AudioBuffer | null>(null);
+const waveformPath = ref<string>('');
+
+const svgWidth = 1000;
+const svgHeight = 128;
 
 const selectionStart = ref(0);
 const selectionWidth = ref(0);
@@ -53,30 +69,12 @@ const dragStartX = ref(0);
 const initialStart = ref(0);
 const initialWidth = ref(0);
 
-const drawWaveform = () => {
-  if (!canvas.value || !audioBuffer.value) return;
-  
-  const ctx = canvas.value.getContext('2d');
-  if (!ctx) return;
+const generateWaveformPath = (data: Float32Array) => {
+  const step = Math.ceil(data.length / svgWidth);
+  const amp = svgHeight / 2;
+  let path = `M 0 ${amp}`;
 
-  // Set canvas dimensions based on container size
-  canvas.value.width = canvas.value.offsetWidth;
-  canvas.value.height = canvas.value.offsetHeight;
-
-  // Clear canvas
-  ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
-
-  // Get audio data
-  const data = audioBuffer.value.getChannelData(0);
-  const step = Math.ceil(data.length / canvas.value.width);
-  const amp = canvas.value.height / 2;
-
-  // Draw waveform
-  ctx.beginPath();
-  ctx.strokeStyle = '#FFFFFF'; // Changed from '#ff0000' to white
-  ctx.lineWidth = 1;
-
-  for (let i = 0; i < canvas.value.width; i++) {
+  for (let i = 0; i < svgWidth; i++) {
     let min = 1.0;
     let max = -1.0;
     
@@ -86,11 +84,10 @@ const drawWaveform = () => {
       if (datum > max) max = datum;
     }
     
-    ctx.moveTo(i, (1 + min) * amp);
-    ctx.lineTo(i, (1 + max) * amp);
+    path += ` L ${i} ${(1 + min) * amp} L ${i} ${(1 + max) * amp}`;
   }
 
-  ctx.stroke();
+  return path;
 };
 
 const handleFileUpload = async (event: Event) => {
@@ -99,7 +96,6 @@ const handleFileUpload = async (event: Event) => {
   
   if (!file) return;
 
-  // Initialize audio context if needed
   if (!audioContext.value) {
     audioContext.value = new AudioContext();
   }
@@ -107,11 +103,12 @@ const handleFileUpload = async (event: Event) => {
   try {
     const arrayBuffer = await file.arrayBuffer();
     audioBuffer.value = await audioContext.value.decodeAudioData(arrayBuffer);
-    drawWaveform();
+    const audioData = audioBuffer.value.getChannelData(0);
+    waveformPath.value = generateWaveformPath(audioData);
     
     // Set initial selection to full width
     selectionStart.value = 0;
-    selectionWidth.value = canvas.value?.offsetWidth || 0;
+    selectionWidth.value = svg.value?.getBoundingClientRect().width || 0;
   } catch (error) {
     console.error('Error loading audio file:', error);
   }
@@ -124,10 +121,10 @@ const startDragging = (handle: 'start' | 'end') => {
 };
 
 const handleMouseMove = (e: MouseEvent) => {
-  if (!isDragging.value || !canvas.value) return;
+  if (!isDragging.value || !svg.value) return;
 
-  const rect = canvas.value.getBoundingClientRect();
-  const x = Math.max(0, Math.min(e.clientX - rect.left, canvas.value.offsetWidth));
+  const rect = svg.value.getBoundingClientRect();
+  const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
 
   if (isDragging.value === 'start') {
     const newStart = Math.min(x, initialStart.value + initialWidth.value - 20);
@@ -135,7 +132,7 @@ const handleMouseMove = (e: MouseEvent) => {
     selectionStart.value = newStart;
     selectionWidth.value = newWidth;
   } else {
-    const newWidth = Math.max(20, Math.min(x - selectionStart.value, canvas.value.offsetWidth - selectionStart.value));
+    const newWidth = Math.max(20, Math.min(x - selectionStart.value, rect.width - selectionStart.value));
     selectionWidth.value = newWidth;
   }
 };
@@ -146,8 +143,9 @@ const handleMouseUp = () => {
 
 // Handle window resize
 const handleResize = () => {
-  if (audioBuffer.value) {
-    drawWaveform();
+  if (audioBuffer.value && svg.value) {
+    const rect = svg.value.getBoundingClientRect();
+    selectionWidth.value = Math.min(selectionWidth.value, rect.width - selectionStart.value);
   }
 };
 
