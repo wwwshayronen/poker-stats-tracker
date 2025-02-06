@@ -11,19 +11,25 @@
         file:bg-violet-50 file:text-violet-700
         hover:file:bg-violet-100"
     />
-    <canvas ref="canvas" class="w-full h-32 bg-gray-50 rounded-lg"></canvas>
-    <div class="absolute inset-0 mt-12 pointer-events-none">
+    <div class="relative">
+      <canvas ref="canvas" class="w-full h-32 bg-gray-50 rounded-lg"></canvas>
       <div 
-        ref="selection" 
-        class="absolute h-full bg-[#F6B637] opacity-30"
-        :style="{ left: `${selectionStart}px`, width: `${selectionWidth}px` }"
-      ></div>
+        v-if="audioBuffer"
+        class="absolute inset-0 pointer-events-none"
+      >
+        <div 
+          class="absolute h-full bg-[#F6B637] opacity-30"
+          :style="{ left: `${selectionStart}px`, width: `${selectionWidth}px` }"
+        ></div>
+      </div>
       <div 
+        v-if="audioBuffer"
         class="absolute h-8 w-1 bg-gray-600 cursor-ew-resize top-1/2 -translate-y-1/2"
         :style="{ left: `${selectionStart}px` }"
         @mousedown="startDragging('start')"
       ></div>
       <div 
+        v-if="audioBuffer"
         class="absolute h-8 w-1 bg-gray-600 cursor-ew-resize top-1/2 -translate-y-1/2"
         :style="{ left: `${selectionStart + selectionWidth}px` }"
         @mousedown="startDragging('end')"
@@ -37,12 +43,11 @@ import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 const container = ref<HTMLDivElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
-const selection = ref<HTMLDivElement | null>(null);
 const audioContext = ref<AudioContext | null>(null);
 const audioBuffer = ref<AudioBuffer | null>(null);
 
 const selectionStart = ref(0);
-const selectionWidth = ref(800);
+const selectionWidth = ref(0);
 const isDragging = ref<'start' | 'end' | null>(null);
 const dragStartX = ref(0);
 const initialStart = ref(0);
@@ -54,7 +59,7 @@ const drawWaveform = () => {
   const ctx = canvas.value.getContext('2d');
   if (!ctx) return;
 
-  // Set canvas dimensions
+  // Set canvas dimensions based on container size
   canvas.value.width = canvas.value.offsetWidth;
   canvas.value.height = canvas.value.offsetHeight;
 
@@ -66,12 +71,11 @@ const drawWaveform = () => {
   const step = Math.ceil(data.length / canvas.value.width);
   const amp = canvas.value.height / 2;
 
+  // Draw waveform
   ctx.beginPath();
-  ctx.moveTo(0, amp);
   ctx.strokeStyle = '#ff0000';
   ctx.lineWidth = 1;
 
-  // Draw waveform
   for (let i = 0; i < canvas.value.width; i++) {
     let min = 1.0;
     let max = -1.0;
@@ -82,7 +86,7 @@ const drawWaveform = () => {
       if (datum > max) max = datum;
     }
     
-    ctx.lineTo(i, (1 + min) * amp);
+    ctx.moveTo(i, (1 + min) * amp);
     ctx.lineTo(i, (1 + max) * amp);
   }
 
@@ -105,9 +109,9 @@ const handleFileUpload = async (event: Event) => {
     audioBuffer.value = await audioContext.value.decodeAudioData(arrayBuffer);
     drawWaveform();
     
-    // Reset selection to full width
+    // Set initial selection to full width
     selectionStart.value = 0;
-    selectionWidth.value = canvas.value?.offsetWidth || 800;
+    selectionWidth.value = canvas.value?.offsetWidth || 0;
   } catch (error) {
     console.error('Error loading audio file:', error);
   }
@@ -115,7 +119,6 @@ const handleFileUpload = async (event: Event) => {
 
 const startDragging = (handle: 'start' | 'end') => {
   isDragging.value = handle;
-  dragStartX.value = selectionStart.value;
   initialStart.value = selectionStart.value;
   initialWidth.value = selectionWidth.value;
 };
@@ -141,43 +144,25 @@ const handleMouseUp = () => {
   isDragging.value = null;
 };
 
+// Handle window resize
+const handleResize = () => {
+  if (audioBuffer.value) {
+    drawWaveform();
+  }
+};
+
 onMounted(() => {
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
+  window.addEventListener('resize', handleResize);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('mousemove', handleMouseMove);
   window.removeEventListener('mouseup', handleMouseUp);
+  window.removeEventListener('resize', handleResize);
   if (audioContext.value) {
     audioContext.value.close();
   }
 });
 </script>
-
-<style scoped>
-.relative {
-  position: relative;
-}
-.absolute {
-  position: absolute;
-}
-.inset-0 {
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-}
-.w-full {
-  width: 100%;
-}
-.mb-4 {
-  margin-bottom: 1rem;
-}
-.mt-12 {
-  margin-top: 3rem;
-}
-.pointer-events-none {
-  pointer-events: none;
-}
-</style>
