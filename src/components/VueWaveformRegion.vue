@@ -18,13 +18,19 @@
         :viewBox="`0 0 ${svgWidth} ${svgHeight}`"
         preserveAspectRatio="none"
       >
-        <path
-          v-if="waveformPath"
-          :d="waveformPath"
-          stroke="white"
-          fill="none"
-          stroke-width="1"
-        />
+        <!-- Define the clip path using the selection region -->
+        <defs>
+          <clipPath :id="'waveformClip'">
+            <rect
+              :x="selectionStart"
+              y="0"
+              :width="selectionWidth"
+              :height="svgHeight"
+            />
+          </clipPath>
+        </defs>
+
+        <!-- Selection region background -->
         <rect
           v-if="audioBuffer"
           :x="selectionStart"
@@ -32,6 +38,16 @@
           :width="selectionWidth"
           :height="svgHeight"
           class="fill-[#F6B637] opacity-50"
+        />
+
+        <!-- Clipped waveform path -->
+        <path
+          v-if="waveformPath"
+          :d="waveformPath"
+          stroke="white"
+          fill="none"
+          stroke-width="1"
+          clip-path="url(#waveformClip)"
         />
       </svg>
       <div 
