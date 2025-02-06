@@ -53,9 +53,6 @@ const initWaveSurfer = () => {
     normalize: true,
     backend: 'WebAudio'
   });
-
-  // Load a default audio file
-  wavesurfer.load('https://wavesurfer-js.org/example/media/demo.wav');
 };
 
 const initSVG = () => {
