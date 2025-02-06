@@ -12,13 +12,13 @@
         hover:file:bg-violet-100"
     />
     <div class="relative">
-      <canvas ref="canvas" class="w-full h-32 bg-gray-50 rounded-lg absolute inset-0"></canvas>
+      <canvas ref="canvas" class="w-full h-32 bg-gray-800 rounded-lg absolute inset-0"></canvas>
       <div 
         v-if="audioBuffer"
         class="absolute inset-0"
       >
         <div 
-          class="absolute h-full bg-[#F6B637] opacity-30"
+          class="absolute h-full bg-[#F6B637] opacity-50"
           :style="{ left: `${selectionStart}px`, width: `${selectionWidth}px` }"
         ></div>
       </div>
