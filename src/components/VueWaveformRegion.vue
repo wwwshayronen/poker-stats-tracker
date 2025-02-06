@@ -33,8 +33,9 @@ let svg: any = null;
 let region: any = null;
 let leftHandle: any = null;
 let rightHandle: any = null;
+let audioBuffer: AudioBuffer | null = null;
 
-const handleFileUpload = (event: Event) => {
+const handleFileUpload = async (event: Event) => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   
@@ -49,11 +50,38 @@ const initWaveSurfer = () => {
 
   wavesurfer = WaveSurfer.create({
     container: waveformContainer.value,
-    waveColor: 'rgba(255, 255, 255, 0.3)',
-    progressColor: 'rgba(255, 255, 255, 0.5)',
+    waveColor: '#ff0000',
+    progressColor: '#ff6666',
     height: height.value,
     normalize: true,
+    interact: false,
     backend: 'WebAudio'
+  });
+
+  wavesurfer.on('ready', () => {
+    audioBuffer = wavesurfer.getDecodedData();
+  });
+};
+
+const updateWaveformView = () => {
+  if (!wavesurfer || !audioBuffer) return;
+
+  const start = leftHandle.cx() / width.value;
+  const end = rightHandle.cx() / width.value;
+  
+  // Create a new AudioBuffer with the trimmed data
+  const sampleRate = audioBuffer.sampleRate;
+  const startSample = Math.floor(start * audioBuffer.length);
+  const endSample = Math.floor(end * audioBuffer.length);
+  
+  // Update the waveform display
+  wavesurfer.regions.clear();
+  wavesurfer.regions.add({
+    start: start * audioBuffer.duration,
+    end: end * audioBuffer.duration,
+    color: 'rgba(0, 0, 0, 0.1)',
+    drag: false,
+    resize: false
   });
 };
 
@@ -89,12 +117,11 @@ const initSVG = () => {
       leftHandle.center(newX, height.value / 2);
       
       // Update region position and width
-      const oldX = region.x();
-      const oldWidth = region.width();
-      const deltaX = newX - oldX;
-      
       region.x(newX);
-      region.width(oldWidth - deltaX);
+      region.width(rightHandle.cx() - newX);
+      
+      // Update waveform view
+      updateWaveformView();
     });
 
   rightHandle.draggable()
@@ -102,6 +129,9 @@ const initSVG = () => {
       const newX = Math.max(leftHandle.cx() + 20, Math.min(e.detail.box.x, width.value));
       rightHandle.center(newX, height.value / 2);
       region.width(newX - region.x());
+      
+      // Update waveform view
+      updateWaveformView();
     });
 };
 
