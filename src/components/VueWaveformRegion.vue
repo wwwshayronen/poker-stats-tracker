@@ -87,9 +87,14 @@ const initSVG = () => {
     .on('dragmove', (e: any) => {
       const newX = Math.max(0, Math.min(e.detail.box.x, rightHandle.cx() - 20));
       leftHandle.center(newX, height.value / 2);
-      const regionWidth = rightHandle.cx() - newX;
-      region.width(regionWidth);
+      
+      // Update region position and width
+      const oldX = region.x();
+      const oldWidth = region.width();
+      const deltaX = newX - oldX;
+      
       region.x(newX);
+      region.width(oldWidth - deltaX);
     });
 
   rightHandle.draggable()
