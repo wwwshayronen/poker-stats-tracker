@@ -1,7 +1,18 @@
 <template>
-  <div ref="container" class="relative w-full h-32">
-    <div ref="waveformContainer" class="absolute inset-0"></div>
-    <svg ref="svgContainer" class="absolute inset-0" :width="width" :height="height"></svg>
+  <div ref="container" class="relative w-full">
+    <input 
+      type="file" 
+      accept="audio/*" 
+      @change="handleFileUpload" 
+      class="mb-4 block w-full text-sm text-gray-500
+        file:mr-4 file:py-2 file:px-4
+        file:rounded-full file:border-0
+        file:text-sm file:font-semibold
+        file:bg-violet-50 file:text-violet-700
+        hover:file:bg-violet-100"
+    />
+    <div ref="waveformContainer" class="absolute inset-0 mt-12"></div>
+    <svg ref="svgContainer" class="absolute inset-0 mt-12" :width="width" :height="height"></svg>
   </div>
 </template>
 
@@ -20,6 +31,16 @@ let wavesurfer: WaveSurfer | null = null;
 let svg: any = null;
 let region: any = null;
 
+const handleFileUpload = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  
+  if (file && wavesurfer) {
+    const url = URL.createObjectURL(file);
+    wavesurfer.load(url);
+  }
+};
+
 const initWaveSurfer = () => {
   if (!waveformContainer.value) return;
 
@@ -32,7 +53,7 @@ const initWaveSurfer = () => {
     backend: 'WebAudio'
   });
 
-  // Load a sample audio file or use your own
+  // Load a default audio file
   wavesurfer.load('https://wavesurfer-js.org/example/media/demo.wav');
 };
 
@@ -44,6 +65,7 @@ const initSVG = () => {
   // Create the draggable region
   region = svg.rect(width.value, height.value)
     .fill('#F6B637')
+    .opacity(0.3)
     .radius(8);
 
   // Add left handle
@@ -78,8 +100,11 @@ const initSVG = () => {
 };
 
 onMounted(() => {
-  initWaveSurfer();
-  initSVG();
+  // Delay initialization to ensure proper mounting
+  setTimeout(() => {
+    initWaveSurfer();
+    initSVG();
+  }, 100);
 });
 
 onBeforeUnmount(() => {
@@ -105,7 +130,10 @@ onBeforeUnmount(() => {
 .w-full {
   width: 100%;
 }
-.h-32 {
-  height: 8rem;
+.mb-4 {
+  margin-bottom: 1rem;
+}
+.mt-12 {
+  margin-top: 3rem;
 }
 </style>
