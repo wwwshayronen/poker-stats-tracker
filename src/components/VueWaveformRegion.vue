@@ -1,3 +1,4 @@
+
 <template>
   <div ref="container" class="relative w-full">
     <input 
@@ -14,13 +15,19 @@
     <div ref="svgContainer" class="relative">
       <div ref="waveformContainer" class="w-full h-32 bg-gray-800 rounded-lg"></div>
       <div 
-        v-if="audioBuffer"
+        class="absolute h-32 bg-[#F6B637] opacity-50 cursor-move"
+        :style="{ 
+          left: `${selectionStart}px`, 
+          width: `${selectionWidth}px`,
+          top: '0'
+        }"
+      ></div>
+      <div 
         class="absolute h-8 w-1 bg-gray-600 cursor-ew-resize top-1/2 -translate-y-1/2"
         :style="{ left: `${selectionStart}px` }"
         @mousedown="startDragging('start')"
       ></div>
       <div 
-        v-if="audioBuffer"
         class="absolute h-8 w-1 bg-gray-600 cursor-ew-resize top-1/2 -translate-y-1/2"
         :style="{ left: `${selectionStart + selectionWidth}px` }"
         @mousedown="startDragging('end')"
@@ -44,8 +51,8 @@ const selectionRect = ref<any>(null);
 const svgWidth = 1000;
 const svgHeight = 128;
 
-const selectionStart = ref(0);
-const selectionWidth = ref(0);
+const selectionStart = ref(100);  // Default starting position
+const selectionWidth = ref(200);  // Default width
 const isDragging = ref<'start' | 'end' | null>(null);
 const initialStart = ref(0);
 const initialWidth = ref(0);
@@ -71,19 +78,37 @@ const generateWaveformPath = (data: Float32Array) => {
   return pathData;
 };
 
+const drawWaveform = () => {
+  if (!waveformContainer.value || !audioBuffer.value) return;
+
+  // Clear previous SVG content
+  waveformContainer.value.innerHTML = '';
+  
+  // Initialize SVG.js
+  draw.value = SVG().addTo(waveformContainer.value).size('100%', svgHeight);
+  
+  // Get audio data
+  const audioData = audioBuffer.value.getChannelData(0);
+  const pathData = generateWaveformPath(audioData);
+  
+  // Create waveform path
+  waveformPath.value = draw.value
+    .path(pathData)
+    .stroke({ color: '#ffffff', width: 1 })
+    .fill('none');
+
+  // Create clip path for the waveform
+  updateWaveform();
+};
+
 const updateWaveform = () => {
-  if (!waveformPath.value || !selectionRect.value) return;
+  if (!waveformPath.value || !draw.value) return;
   
   // Update the clip path
   const clipPath = draw.value.clip().add(
     draw.value.rect(selectionWidth.value, svgHeight).move(selectionStart.value, 0)
   );
   waveformPath.value.clipWith(clipPath);
-  
-  // Update selection rectangle
-  selectionRect.value
-    .move(selectionStart.value, 0)
-    .width(selectionWidth.value);
 };
 
 const handleFileUpload = async (event: Event) => {
@@ -99,32 +124,7 @@ const handleFileUpload = async (event: Event) => {
   try {
     const arrayBuffer = await file.arrayBuffer();
     audioBuffer.value = await audioContext.value.decodeAudioData(arrayBuffer);
-    const audioData = audioBuffer.value.getformPath(audioData);
-    
-    // Clear previous SVG content
-    if (waveformContainer.value) {
-      waveformContainer.value.innerHTML = '';
-      
-      // Initialize SVG.js
-      draw.value = SVG().addTo(waveformContainer.value).size('100%', svgHeight);
-      
-      // Create selection rectangle
-      selectionRect.value = draw.value
-        .rect(svgWidth, svgHeight)
-        .fill('#F6B637')
-        .opacity(0.5);
-      
-      // Create waveform path
-      waveformPath.value = draw.value
-        .path(pathData)
-        .stroke({ color: '#ffffff', width: 1 })
-        .fill('none');
-      
-      // Set initial selection
-      selectionStart.value = 0;
-      selectionWidth.value = waveformContainer.value.clientWidth;
-      updateWaveform();
-    }
+    drawWaveform();
   } catch (error) {
     console.error('Error loading audio file:', error);
   }
@@ -160,7 +160,7 @@ const handleMouseUp = () => {
 };
 
 const handleResize = () => {
-  if (audioBuffer.value && waveformContainer.value) {
+  if (waveformContainer.value) {
     const rect = waveformContainer.value.getBoundingClientRect();
     selectionWidth.value = Math.min(selectionWidth.value, rect.width - selectionStart.value);
     updateWaveform();
@@ -171,6 +171,11 @@ onMounted(() => {
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
   window.addEventListener('resize', handleResize);
+
+  // Initialize SVG even without audio file
+  if (waveformContainer.value) {
+    draw.value = SVG().addTo(waveformContainer.value).size('100%', svgHeight);
+  }
 });
 
 onBeforeUnmount(() => {
